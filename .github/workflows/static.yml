@@ -1,43 +1,44 @@
-# Simple workflow for deploying static content to GitHub Pages
-name: Deploy static content to Pages
+name: CI
 
-on:
-  # Runs on pushes targeting the default branch
+on: 
   push:
-    branches: ["master"]
-
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
+    branches:
+      - master
 
 jobs:
-  # Single deploy job since we're just deploying
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [10.x]
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v2
+        uses: actions/checkout@v1
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v1
         with:
-          # Upload entire repository
-          path: '.'
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v3
+          node-version: ${{ matrix.node-version }}
+      - name: Build project
+        env:
+          CODING_USER: ${{ secrets.CODING_USER }}
+          CODING_TOKEN: ${{ secrets.CODING_TOKEN }}
+        run: yarn --frozen-lockfile && yarn run deploy
+      # - name: Upload COS
+      #   uses: zkqiang/tencent-cos-action@v0.1.0
+      #   with:
+      #     args: list / -ar && delete -r -f / && upload -r ./docs/.vuepress/dist/ /
+      #     secret_id: ${{ secrets.TENCENT_CLOUD_SECRET_ID }}
+      #     secret_key: ${{ secrets.TENCENT_CLOUD_SECRET_KEY }}
+      #     bucket: ${{ secrets.TENCENT_CLOUD_BUCKET }}
+      #     region: ap-beijing
+      - name: Deploy to ECS
+        uses: cross-the-world/scp-pipeline@master
+        with:
+          host: ${{ secrets.ECS_HOST }}
+          user: ${{ secrets.ECS_USERNAME }}
+          pass: ${{ secrets.ECS_PASSWORD }}
+          connect_timeout: 10s
+          local: './docs/.vuepress/dist/*'
+          remote: '/var/www/html/'
